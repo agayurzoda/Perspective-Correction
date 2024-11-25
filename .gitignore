@@ -1,0 +1,19 @@
+# Ignore uploaded images and processed outputs
+uploads/
+outputs/
+
+# Flask server temporary files
+*.pyc
+__pycache__/
+
+# IDE and OS-specific files
+*.log
+*.swp
+*.swo
+.DS_Store
+
+# Flask debug and cache files
+*.pyo
+*.env
+instance/
+*.sqlite
