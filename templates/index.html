@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document Perspective Correction</title>
+    <title>Document Correction</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        canvas { border: 1px solid black; margin-top: 20px; cursor: crosshair; }
         #result img { max-width: 100%; height: auto; margin-top: 20px; }
     </style>
 </head>
@@ -13,36 +14,96 @@
     <h1>Document Perspective Correction</h1>
     <form id="uploadForm">
         <input type="file" id="imageInput" name="image" accept="image/*" required>
-        <button type="submit">Upload and Process</button>
+        <button type="submit">Upload</button>
     </form>
+
+    <div id="canvasContainer" style="display: none;">
+        <h3>Click on the four corners of the document in order:</h3>
+        <canvas id="imageCanvas"></canvas>
+        <button id="processButton" disabled>Correct Perspective</button>
+    </div>
+
     <div id="result"></div>
 
     <script>
         const form = document.getElementById('uploadForm');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const canvas = document.getElementById('imageCanvas');
+        const ctx = canvas.getContext('2d');
         const resultDiv = document.getElementById('result');
+        const processButton = document.getElementById('processButton');
+
+        let corners = [];
+        let uploadedImagePath = '';
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(form);
+            resultDiv.innerHTML = 'Uploading...';
 
-            resultDiv.innerHTML = 'Processing...';
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
 
-            try {
-                const response = await fetch('/process', {
-                    method: 'POST',
-                    body: formData
-                });
+            if (result.imagePath) {
+                uploadedImagePath = result.imagePath;
+                loadImageForCanvas(uploadedImagePath);
+                resultDiv.innerHTML = '';
+            } else {
+                resultDiv.innerHTML = 'Error uploading image.';
+            }
+        });
 
-                const result = await response.json();
-                if (response.ok) {
-                    resultDiv.innerHTML = `<a href="${result.url}" target="_blank">
-                        <img src="${result.url}" alt="Processed Image">
-                    </a>`;
-                } else {
-                    resultDiv.innerHTML = `Error: ${result.error}`;
+        function loadImageForCanvas(imagePath) {
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                canvasContainer.style.display = 'block';
+                corners = [];
+                processButton.disabled = true;
+            };
+            img.src = imagePath;
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (corners.length < 4) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                corners.push([x, y]);
+
+                // Draw a point on the canvas
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+
+                if (corners.length === 4) {
+                    processButton.disabled = false;
                 }
-            } catch (err) {
-                resultDiv.innerHTML = `Error: ${err.message}`;
+            }
+        });
+
+        processButton.addEventListener('click', async () => {
+            const response = await fetch('/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ corners, imagePath: uploadedImagePath }),
+            });
+            const result = await response.json();
+
+            if (result.processedImagePath) {
+                resultDiv.innerHTML = `
+                    <h3>Corrected Image:</h3>
+                    <img src="${result.processedImagePath}" alt="Corrected Document">
+                `;
+                canvasContainer.style.display = 'none';
+            } else {
+                resultDiv.innerHTML = 'Error processing image.';
             }
         });
     </script>
